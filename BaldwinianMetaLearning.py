@@ -35,7 +35,7 @@ import numpy as np
 import pandas as pd
 
 from functools import partial
-from pathos.multiprocessing import ProcessingPool as Pool
+#from pathos.multiprocessing import ProcessingPool as Pool
 
 #First population of parents
 
@@ -161,10 +161,11 @@ class NES():
 
         self.directory = os.getcwd()
         self.data_repo = "{0}/{1}".format(self.directory, self.folder)
+        mkdir(self.data_repo)
 
         # Set up multiprocessing:     
-        cpus = multiprocessing.cpu_count()
-        self.pool = Pool(cpus-1)
+        #cpus = multiprocessing.cpu_count()
+        #self.pool = Pool(cpus-1)
 
         # Spawn population of networks using self.blueprint as a template:
         self.loss_fn = CrossEntropyLoss()
@@ -234,7 +235,17 @@ class NES():
             net = OmniglotNet(self.num_classes, self.loss_fn, num_input_channels)
 
             new_master_net['network'] = net
-            new_master_net['fitness'] = 0.0
+            new_master_net['fitness'] = 0.0 
+
+
+            keys = ("_tr_acc", "_tr_loss", "_val_loss", "_val_acc")
+
+            for task in range(self.meta_batch_size):
+
+                for k in keys:
+                    
+                    key = "t" + str(task) + k
+                    new_master_net[key] = 0.0
 
             return_list.append(new_master_net)
 
@@ -252,20 +263,45 @@ class NES():
         inner_net = InnerLoop(self.num_classes, self.loss_fn, self.num_updates, self.inner_step_size, 
                                 self.inner_batch_size, self.meta_batch_size, self.num_input_channels)
 
-        task1 = self.get_task("../data/{}".format(self.dataset), self.num_classes, self.num_inst)
-        task2 = self.get_task("../data/{}".format(self.dataset), self.num_classes, self.num_inst)
+        #tasks = {}
+        #tasks['t1'] = self.get_task("../data/{}".format(self.dataset), self.num_classes, self.num_inst)
+        
+        for it in range(self.meta_batch_size):
+ 
+            task = self.get_task("../data/{}".format(self.dataset), self.num_classes, self.num_inst)
 
-
-        # Outer-loop is completed by NES for G generations
-
-        for task in [task1, task2]:
+            # Outer-loop is completed by NES for G generations
 
             inner_net.copy_weights(individual['network'])
-            metrics, gradients = inner_net.forward(task)
+            metrics = inner_net.forward(task)
             
             # Want validation accuracy for fitness (tr_loss, tr_acc, val_loss, val_acc):  
             individual['fitness'] += metrics[-1]
+
+            keys = ("_tr_loss", "_tr_acc", "_val_loss", "_val_acc")
+            idx = 0
+
+            for k in keys:    
                 
+                key = "t" + str(it) + k
+                individual[key] = metrics[idx]
+                idx += 1
+
+        self.Record_Performance(individual)                
+
+
+    def Record_Performance(self, individual):
+
+        write_location = "{0}/{1}/Fitness_History_Seed{2}.csv".format(self.directory, self.folder, self.seed)
+
+        bad_keys = ("network", "fitness")
+        sorted_keys = list(sorted([k for k in individual.keys() if k not in bad_keys]))
+
+        # 't0_tr_acc', 't0_tr_loss', 't0_val_acc', 't0_val_loss', 't1_tr_acc', 't1_tr_loss', 't1_val_acc', 't1_val_loss'
+        with open(write_location, "a+") as fitfile:
+                    fitfile.write(",".join([str(individual[k]) for k in sorted_keys]))
+                    fitfile.write("\n")
+
 
     def get_task(self, root, n_cl, n_inst, split='train'):
         if 'mnist' in root:
@@ -278,8 +314,10 @@ class NES():
 
     def Save_Champion(self):
 
-        mkdir(self.data_repo)
-        filename = "{0}/Champ_G{1}_F{2}.p".format(self.data_repo, self.g, self.champion['fitness'])
+        write_location = "{0}/Champions/{1}".format(self.data_repo, self.seed)
+        mkdir(write_location)     
+
+        filename = "{0}/Champ{1}_G{2}_F{3}.p".format(write_location, self.seed, self.g, self.champion['fitness'])
         pickle_dict(self.champion, filename)
 
     def New_Swarm(self):

@@ -64,17 +64,17 @@ class InnerLoop(OmniglotNet):
         ##### Test net after training, should be better than random ####
         tr_post_loss, tr_post_acc = evaluate(self, train_loader, fast_weights)
         val_post_loss, val_post_acc = evaluate(self, val_loader, fast_weights) 
-        print('Train Inner step Loss', tr_pre_loss, tr_post_loss)
-        print('Train Inner step Acc', tr_pre_acc, tr_post_acc)
-        print('Val Inner step Loss', val_pre_loss, val_post_loss)
-        print('Val Inner step Acc', val_pre_acc, val_post_acc)
+        print('Train Inner step Loss: Pre={0}, Post={1}'.format(tr_pre_loss, tr_post_loss))
+        print('Train Inner step Acc: Pre={0}, Post={1}'.format(tr_pre_acc, tr_post_acc))
+        print('Val Inner step Loss: Pre={0}, Post={1}'.format(val_pre_loss, val_post_loss))
+        print('Val Inner step Acc: Pre={0}, Post={1}'.format(val_pre_acc, val_post_acc))
         
         # Compute the meta gradient and return it
         in_, target = val_loader.__iter__().next()
         loss,_ = self.forward_pass(in_, target, fast_weights) 
-        loss = loss / self.meta_batch_size # normalize loss
-        grads = torch.autograd.grad(loss, self.parameters())
-        meta_grads = {name:g for ((name, _), g) in zip(self.named_parameters(), grads)}
+        #loss = loss / self.meta_batch_size # normalize loss
+        #grads = torch.autograd.grad(loss, self.parameters())
+        #meta_grads = {name:g for ((name, _), g) in zip(self.named_parameters(), grads)}
         metrics = (tr_post_loss, tr_post_acc, val_post_loss, val_post_acc)
-        return metrics, meta_grads
+        return metrics
 

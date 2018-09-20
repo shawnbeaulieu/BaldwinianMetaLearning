@@ -1,0 +1,12 @@
+#PBS -j oe
+#PBS -N NES
+#PBS -m a
+#PBS -m b
+#PBS -o $HOME/scratch/NES_$ARG_SEED.log
+#PBS -l nodes=1:ppn=8,pmem=4gb,pvmem=4gb
+#PBS -l walltime=03:00:00
+#PBS -q shortq
+
+PATH=$HOME/anaconda3/bin:$PATH
+cd $HOME/BaldwinianMetaLearning
+PYTHONPATH=$HOME/BaldwinianMetaLearning $HOME/anaconda3/bin/python ./Run_BML.py $ARG_SEED

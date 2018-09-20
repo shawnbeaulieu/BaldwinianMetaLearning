@@ -14,8 +14,8 @@ if __name__ == '__main__':
 
     Parameters = {
 
-        'popsize': 50,
-        'generations': 10,
+        'popsize': 1,
+        'generations': 1000,
         'dataset': 'omniglot',
         'num_classes': 2,
         'num_inst': 5,
@@ -23,11 +23,11 @@ if __name__ == '__main__':
         'inner_step_size': 0.1,
         'num_input_channels': 3,
         'inner_batch_size': 100,
-        'meta_batch_size': 1,
-        'num_updates': 8,
+        'meta_batch_size': 2,
+        'num_updates': 2,
         'folder': 'data',
         'seed': int(sys.argv[1]),
-        'folder': 'Experiment_MAML'
+        'folder': 'BML_Repo_FiveClasses_v2'
     }
 
 
