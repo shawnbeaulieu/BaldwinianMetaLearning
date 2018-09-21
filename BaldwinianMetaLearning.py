@@ -87,8 +87,8 @@ def Compute_Gradients(pop_of_weights, scores):
         # Gradient is the mean of gradients across the population, where each 
         # individual gradient is weighted by the ranked score:
 
-        means_grad = \
-            np.add(means_grad, Mean_Gradient(pop_of_weights[idx], means)*scores[idx], out=means_grad, casting='unsafe')
+        means_grad = np.add(means_grad, Mean_Gradient(pop_of_weights[idx], means)*scores[idx], 
+                                out=means_grad, casting='unsafe')
         #stds_gradient += Sigma_Gradient(individual[0], means, stds)*individual[1]
 
     # Turn sum in mean:
@@ -102,24 +102,30 @@ def Rank(population):
     scores = [p['fitness'] for p in population]
 
     ranks = np.argsort(scores)
-    ranked_population = []
-    ranked_population = [population[rank] for rank in ranks]
-    
-    adjusted_scores = np.arange(-0.5, 0.5, 1/len(population))
+    champ_idx = ranks[-1]
+    adjusted_scores = np.linspace(-0.5, 0.5, len(population))
 
-    for i in range(len(population)):
+    for idx in range(len(population)):
 
-        ranked_population[i]['fitness'] = adjusted_scores[i]
+        rank = ranks[idx]
+        population[rank]['ranked_fitness'] = adjusted_scores[idx]
+        print(population[rank]['fitness'], adjusted_scores[idx])
 
-    return(ranked_population, scores)
+    return(population, champ_idx)
 
 def Sample_W(m,v):
     return(np.random.normal(m,v))
 
-def Inspect_Swarm(population, scores):
+def Inspect_Swarm(population, ranked=True):
 
     mean_grads = {}
     means = {}
+
+    if ranked:
+        scores = np.linspace(-0.5, 0.5, len(population))
+
+    else:
+        scores = np.array([p['fitness'] for p in population])
 
     layers = population[0]['network'].state_dict().keys()
 
@@ -127,6 +133,7 @@ def Inspect_Swarm(population, scores):
         return(weights.state_dict()[layer].data.numpy())
 
     for layer in layers:
+
         # Take weights in network and convert them to a numpy array for computing gradients
         weights_in_layer = [convert2numpy(p['network'], layer) for p in population]
 
@@ -187,25 +194,31 @@ class NES():
             for individual in self.population:
                 self.Evaluate(individual)
 
-            # Rank scores (batch normalization):
-            self.ranked_population, scores = Rank(self.population)
+            if self.ranked_fitness:
+                # Rank scores (batch normalization):
+                self.population, champ_idx = Rank(self.population)
+
+            else:
+ 
+                champ_idx = np.argsort([p['fitness'] for p in self.population])[-1]
 
             """==================== NEW CHAMPION ====================""" 
 
             if self.g == 0:
-                self.champion = copy.copy(self.population[-1])
+                self.champion = copy.copy(self.population[champ_idx])
 
             else:
-                if self.champion['fitness'] < self.population[-1]['fitness']:
-                    self.champion = copy.copy(self.population[-1])
+                if self.champion['fitness'] < self.population[champ_idx]['fitness']:
+                    self.champion = copy.copy(self.population[champ_idx])
 
             print("Generation {0}: High Score = {1}".format(self.g, self.champion['fitness']))
+
             self.Save_Champion()
 
             """==================== NES GRADIENT ===================="""
 
             # Compute approximate gradients:
-            self.means, self.mean_grads = Inspect_Swarm(self.ranked_population, scores)
+            self.means, self.mean_grads = Inspect_Swarm(self.population)
 
             """==================== UPDATE POPULATION ====================""" 
 
@@ -294,7 +307,7 @@ class NES():
 
         write_location = "{0}/{1}/Fitness_History_Seed{2}.csv".format(self.directory, self.folder, self.seed)
 
-        bad_keys = ("network", "fitness")
+        bad_keys = ("network", "fitness", "ranked_fitness")
         sorted_keys = list(sorted([k for k in individual.keys() if k not in bad_keys]))
 
         # 't0_tr_acc', 't0_tr_loss', 't0_val_acc', 't0_val_loss', 't1_tr_acc', 't1_tr_loss', 't1_val_acc', 't1_val_loss'

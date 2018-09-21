@@ -14,20 +14,21 @@ if __name__ == '__main__':
 
     Parameters = {
 
-        'popsize': 1,
+        'popsize': 100,
         'generations': 1000,
+        'ranked_fitness': True,
         'dataset': 'omniglot',
-        'num_classes': 2,
+        'num_classes': 5,
         'num_inst': 5,
         'learning_rate': 0.1,
         'inner_step_size': 0.1,
         'num_input_channels': 3,
-        'inner_batch_size': 100,
+        'inner_batch_size': 200,
         'meta_batch_size': 2,
         'num_updates': 2,
         'folder': 'data',
         'seed': int(sys.argv[1]),
-        'folder': 'BML_Repo_FiveClasses_v2'
+        'folder': 'BML_Repo_Ranked_ShortQ'
     }
 
 
