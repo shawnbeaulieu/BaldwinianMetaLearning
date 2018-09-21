@@ -16,7 +16,7 @@ if __name__ == '__main__':
 
         'popsize': 50,
         'generations': 1000,
-        'ranked_fitness': True,
+        'ranked_fitness': False,
         'dataset': 'omniglot',
         'num_classes': 8,
         'num_inst': 8,
@@ -25,10 +25,10 @@ if __name__ == '__main__':
         'num_input_channels': 3,
         'inner_batch_size': 50,
         'meta_batch_size': 2,
-        'num_updates': 1,
+        'num_updates': 2,
         'folder': 'data',
         'seed': int(sys.argv[1]),
-        'folder': 'BML_Repo_Ranked_ShortQ'
+        'folder': 'BML_Repo_Unranked_ShortQ'
     }
 
 

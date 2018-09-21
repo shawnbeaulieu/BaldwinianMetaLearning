@@ -348,4 +348,5 @@ class NES():
 
                 # Replace current members with new ones drawn from the updated distribution:
                 individual['network'].state_dict()[layer].data.copy_(dummy)
+                individual['fitness'] = 0
 
