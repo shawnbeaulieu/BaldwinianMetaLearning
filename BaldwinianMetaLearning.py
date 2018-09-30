@@ -59,7 +59,7 @@ def Generate(mean, std, dimensions, lower, upper, dist='gauss'):
     elif dist == 'exp':
         return(np.clip(np.random.exponential(mean, dimensions), lower, upper))
 
-def Mean_Gradient(z, u, s=1.0):
+def Mean_Gradient(z, u, s=0.05):
     return((z-u)/s**2)
 
 def Sigma_Gradient(z, u, s):
@@ -87,7 +87,7 @@ def Compute_Gradients(pop_of_weights, scores):
         # Gradient is the mean of gradients across the population, where each 
         # individual gradient is weighted by the ranked score:
 
-        means_grad = np.add(means_grad, Mean_Gradient(pop_of_weights[idx], means)*scores[idx], 
+        means_grad = np.add(means_grad, Mean_Gradient(pop_of_weights[idx], means)*(scores[idx]), 
                                 out=means_grad, casting='unsafe')
         #stds_gradient += Sigma_Gradient(individual[0], means, stds)*individual[1]
 
@@ -122,10 +122,12 @@ def Inspect_Swarm(population, ranked=True):
     means = {}
 
     if ranked:
-        scores = np.linspace(-0.5, 0.5, len(population))
+
+        scores = [p['ranked_fitness'] for p in population]
 
     else:
-        scores = np.array([p['fitness'] for p in population])
+
+        scores = [p['fitness'] for p in population]
 
     layers = population[0]['network'].state_dict().keys()
 
@@ -170,6 +172,7 @@ class NES():
         self.data_repo = "{0}/{1}".format(self.directory, self.folder)
         mkdir(self.data_repo)
 
+        np.random.seed(1337)
         # Set up multiprocessing:     
         #cpus = multiprocessing.cpu_count()
         #self.pool = Pool(cpus-1)
@@ -177,9 +180,66 @@ class NES():
         # Spawn population of networks using self.blueprint as a template:
         self.loss_fn = CrossEntropyLoss()
         self.population = self.Initialize_Population()
+        self.tasks = self.Define_Tasks()
 
         # Begin!
         self.Evolve()
+
+    def Initialize_Population(self):
+
+        """
+        Initialize master nets containing parameters governing the distributions
+        from which individual weights are drawn in the OmniglotNet.
+
+        """
+
+        return_list = []
+
+        for p in range(self.popsize):
+
+            new_master_net = {}
+
+            num_input_channels = 1 if self.dataset == 'mnist' else 3
+            net = OmniglotNet(self.num_classes, self.loss_fn, num_input_channels)
+
+            new_master_net['network'] = net
+            new_master_net['fitness'] = 0.0
+
+
+            keys = ("_tr_acc", "_tr_loss", "_val_loss", "_val_acc")
+
+            for task in range(self.meta_batch_size):
+
+                for k in keys:
+
+                    key = "t" + str(task) + k
+                    new_master_net[key] = 0.0
+
+            return_list.append(new_master_net)
+
+        return(return_list)
+
+
+    def Define_Tasks(self):
+
+        tasks = {}
+
+        for t in range(self.meta_batch_size):
+
+            tasks[str(t)] = self.Get_Task("../data/{}".format(self.dataset), self.num_classes, self.num_inst)
+
+        return(tasks)
+
+
+    def Get_Task(self, root, n_cl, n_inst, split='train'):
+        if 'mnist' in root:
+            return MNISTTask(root, n_cl, n_inst, split)
+        elif 'omniglot' in root:
+            return OmniglotTask(root, n_cl, n_inst, split)
+        else:
+            print('Unknown dataset')
+        raise(Exception)
+
 
     def Evolve(self):
 
@@ -218,7 +278,7 @@ class NES():
             """==================== NES GRADIENT ===================="""
 
             # Compute approximate gradients:
-            self.means, self.mean_grads = Inspect_Swarm(self.population)
+            self.means, self.mean_grads = Inspect_Swarm(self.population, self.ranked_fitness)
 
             """==================== UPDATE POPULATION ====================""" 
 
@@ -229,40 +289,6 @@ class NES():
 
         print("End of evolution: High Score = {0}".format(self.champion['fitness']))
 
-
-    def Initialize_Population(self):
-
-        """
-        Initialize master nets containing parameters governing the distributions
-        from which individual weights are drawn in the OmniglotNet.
-
-        """
-
-        return_list = []
-
-        for p in range(self.popsize):
-
-            new_master_net = {}
-
-            num_input_channels = 1 if self.dataset == 'mnist' else 3
-            net = OmniglotNet(self.num_classes, self.loss_fn, num_input_channels)
-
-            new_master_net['network'] = net
-            new_master_net['fitness'] = 0.0 
-
-
-            keys = ("_tr_acc", "_tr_loss", "_val_loss", "_val_acc")
-
-            for task in range(self.meta_batch_size):
-
-                for k in keys:
-                    
-                    key = "t" + str(task) + k
-                    new_master_net[key] = 0.0
-
-            return_list.append(new_master_net)
-
-        return(return_list)
 
     def Evaluate(self, individual):
 
@@ -278,16 +304,14 @@ class NES():
 
         #tasks = {}
         #tasks['t1'] = self.get_task("../data/{}".format(self.dataset), self.num_classes, self.num_inst)
-        
-        for it in range(self.meta_batch_size):
+      
+        for t in range(self.meta_batch_size):
  
-            task = self.get_task("../data/{}".format(self.dataset), self.num_classes, self.num_inst)
-
             # Outer-loop is completed by NES for G generations
 
             inner_net.copy_weights(individual['network'])
-            metrics = inner_net.forward(task)
-            
+            metrics = inner_net.forward(self.tasks[str(t)])
+          
             # Want validation accuracy for fitness (tr_loss, tr_acc, val_loss, val_acc):  
             individual['fitness'] += metrics[-1]
 
@@ -296,7 +320,7 @@ class NES():
 
             for k in keys:    
                 
-                key = "t" + str(it) + k
+                key = "t" + str(t) + k
                 individual[key] = metrics[idx]
                 idx += 1
 
@@ -315,16 +339,6 @@ class NES():
                     fitfile.write(",".join([str(individual[k]) for k in sorted_keys]))
                     fitfile.write("\n")
 
-
-    def get_task(self, root, n_cl, n_inst, split='train'):
-        if 'mnist' in root:
-            return MNISTTask(root, n_cl, n_inst, split)
-        elif 'omniglot' in root:
-            return OmniglotTask(root, n_cl, n_inst, split)
-        else:
-            print('Unknown dataset')
-        raise(Exception)
-
     def Save_Champion(self):
 
         write_location = "{0}/Champions/{1}".format(self.data_repo, self.seed)
@@ -336,14 +350,13 @@ class NES():
     def New_Swarm(self):
 
         for individual in self.population:
+
             for layer in self.means.keys():
 
                 # Scale-location transformation of unit-normal: s*x + u
-                dummy = np.random.normal(size=self.means[layer].shape)
+                updated_mean = (self.means[layer] + self.learning_rate*self.mean_grads[layer])
+                dummy = np.random.normal(updated_mean, 0.01, size=self.means[layer].shape)
             
-                # Perform 'gradient ascent' on CURRENT mean for parameters in layer
-                # Standard deviation is fixed to 1:
-                dummy += (self.means[layer] + self.learning_rate*self.mean_grads[layer])
                 dummy = torch.from_numpy(dummy)
 
                 # Replace current members with new ones drawn from the updated distribution:
